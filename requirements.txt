@@ -4,3 +4,4 @@ flask
 flask_migrate
 psycopg2-binary
 flask_cors
+flask_bcrypt
