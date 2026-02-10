@@ -1,0 +1,6 @@
+flask_sqlalchemy
+datetime
+flask
+flask_migrate
+psycopg2-binary
+flask_cors
