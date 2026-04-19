@@ -11,9 +11,9 @@ class User(db.Model):
     password_hash = db.Column(db.String(256), nullable = False)
     creation_timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    ## public_key = db.Column(db.Text, nullable = True)
+    public_key = db.Column(db.Text, nullable = True)
 
-    memberships = db.relationship('TeamMembership', backref = 'user', lazy = 'True')
+    memberships = db.relationship('TeamMembership', backref = 'user', lazy = True)
 
 class Team(db.Model):
     __tablename__ = 'teams'
@@ -46,6 +46,14 @@ class Vault(db.Model):
     version = db.Column(db.Integer, default = 1)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    ## WILL CHANGE AFTER COMPLETING MVP 
-    ## --> will need to add on blob per user per team INSTEAD of one blob per team
-    ## user_id = db.Column(db.Integer, db.ForeignKey('users.id))
+## e2e encryption method to deliver team keys
+class VaultKey(db.Model):
+    __tablename__ = 'vault_keys'
+
+    id = db.Column(db.Integer, primary_key=True)
+    
+    vault_id = db.Column(db.Integer, db.ForeignKey('secrets.id'), nullable=False)
+    
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    encrypted_key = db.Column(db.Text, nullable=False)

@@ -5,3 +5,7 @@ venv
 migrations
 .DS_Store
 .env
+.egg
+*.egg-info/
+build/
+dist/

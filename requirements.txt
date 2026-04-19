@@ -5,3 +5,8 @@ flask_migrate
 psycopg2-binary
 flask_cors
 flask_bcrypt
+flask_jwt_extended
+dotenv
+cryptography
+click
+requests
