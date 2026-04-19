@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timezone
+import re
 
 db = SQLAlchemy()
 
@@ -20,10 +21,16 @@ class Team(db.Model):
 
     id = db.Column(db.Integer, primary_key = True)
     name = db.Column(db.String(100), nullable = False)
+    slug = db.Column(db.String(100), unique = True, nullable = False)
     creation_timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     memberships = db.relationship('TeamMembership', backref='team', lazy = True)
     secrets = db.relationship('Vault', backref='team', lazy = True)
+
+    @staticmethod
+    def generate_slug(name):
+        """Converts 'My Team' to 'my-team'"""
+        return re.sub(r'[\s_]+', '-', re.sub(r'[^\w\s-]', '', name).lower()).strip('-')
     
 class TeamMembership(db.Model):
     __tablename__ = 'team_memberships'

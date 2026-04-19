@@ -1,16 +1,20 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="envsync",
-    version="0.1.0",
+    name='envsync',
+    version='0.1.1',
     packages=find_packages(),
+    include_package_data=True,
     install_requires=[
-        "click",
-        "requests"
+        'click',
+        'requests',
+        'cryptography',
     ],
     entry_points={
-        "console_scripts": [
-            "envsync=cli.env_sync:cli",
+        'console_scripts': [
+            # This line changed! It tells the terminal to look 
+            # inside the 'cli' folder, open 'main.py', and run the 'cli' function
+            'envsync=cli.main:cli',
         ],
     },
 )

@@ -84,6 +84,40 @@ def gen_keypair_if_none(token):
     except requests.exceptions.ConnectionError:
         click.secho("Error: Could not connect to the server to upload key.", fg="red")
 
+###################################################################################################
+#######################     COMMANDS BELOW     ####################################################
+###################################################################################################
+
+## REGISTER ##
+
+@cli.command()
+@click.option('--email', prompt='Email', help='Your email address.')
+@click.password_option(help='Choose a strong password.')
+def register(email, password):
+    """Create a new Env-Sync account."""
+    click.echo(f"Registering account for {email}...")
+    
+    try:
+        response = requests.post(
+            f"{BASE_URL}/register",
+            json={"email": email, "password": password}
+        )
+        
+        if response.status_code == 201:
+            click.secho("Success! Account created.", fg="green")
+            click.echo("You can now log in by running: ", nl=False)
+            click.secho("envsync login", fg="cyan", bold=True)
+        else:
+            # Safely try to get the error message from the JSON respnse
+            try:
+                msg = response.json().get('error', 'Unknown error occurred')
+            except ValueError:
+                msg = response.text
+            click.secho(f"Registration failed: {msg}", fg="red")
+            
+    except requests.exceptions.ConnectionError:
+        click.secho("Error: Could not connect to the server. Is it running on port 7070?", fg="red")
+
 ## LOGIN ##
 @cli.command()
 @click.option('--email', prompt='Email', help='Your registered email.')
@@ -112,8 +146,8 @@ def login(email, password):
 
 ## PUSH ##
 @cli.command()
-@click.option('--team_id', prompt='Team ID', type=int, help='The ID of the team vault')
-def push(team_id):
+@click.option('--team', required=True, help='The name of the team vault')
+def push(team):
     """Encrypts local .env and pushes it to the team vault."""
 
     token = get_token() 
@@ -132,7 +166,7 @@ def push(team_id):
     encrypted_env_blob = f_cipher.encrypt(raw_env_data).decode('utf-8')
 
     click.echo("Fetching team public keys...")
-    key_res = requests.get(f"{BASE_URL}/team/{team_id}/keys", headers=headers)
+    key_res = requests.get(f"{BASE_URL}/team/{team}/keys", headers=headers)
     if key_res.status_code != 200:
         click.secho(f"Failed to fetch keys: {key_res.text}", fg="red")
         return
@@ -157,7 +191,7 @@ def push(team_id):
 
     click.echo("Pushing locked vault to server...")
     payload = {
-        "team_id": team_id,
+        "team": team,
         "env_blob": encrypted_env_blob,
         "encrypted_keys": encrypted_data_keys # bundle of entire teams locked pub keys
     }
@@ -170,14 +204,14 @@ def push(team_id):
 
 ## PULL ##
 @cli.command()
-@click.option('--team_id', prompt='Team ID', type=int, help='The ID of the team vault')
-def pull(team_id):
+@click.option('--team', required=True, help='The name of the team vault')
+def pull(team):
     """Pulls the encrypted .env from the team vault and decrypts it."""
     token = get_token()
     headers = {"Authorization": f"Bearer {token}"}
 
     click.echo("Fetching locked vault from server...")
-    res = requests.get(f"{BASE_URL}/vault?team_id={team_id}", headers=headers)
+    res = requests.get(f"{BASE_URL}/vault?team={team}", headers=headers)
     
     if res.status_code != 200:
         click.secho(f"Failed to fetch vault: {res.text}", fg="red")
@@ -229,6 +263,39 @@ def pull(team_id):
         f.write(decrypted_env_data)
 
     click.secho("Success! .env file securely pulled and decrypted.", fg="green")
+
+    ## CREATE TEAM ##
+@cli.command()
+@click.option('--name', required=True, help='The human-readable name of your new team (e.g. "Project Apollo")')
+def create_team(name):
+    """Creates a new team and makes you the admin."""
+    token = get_token()
+    if not token:
+        click.secho("Error: You must be logged in to create a team. Run 'envsync login' first.", fg="red")
+        return
+
+    headers = {
+        "Authorization": f"Bearer {token}", 
+        "Content-Type": "application/json"
+    }
+
+    click.echo(f"Creating team '{name}'...")
+    
+    try:
+        res = requests.post(f"{BASE_URL}/teams", json={"name": name}, headers=headers)
+        
+        if res.status_code == 201:
+            data = res.json()
+            slug = data.get('slug')
+            click.secho(f"Success! Team created.", fg="green")
+            click.secho(f"Your team slug is: {slug}", fg="cyan", bold=True)
+            click.echo(f"You can now push secrets using: envsync push --team {slug}")
+        else:
+            msg = res.json().get('error', res.text)
+            click.secho(f"Failed to create team: {msg}", fg="red")
+            
+    except requests.exceptions.ConnectionError:
+        click.secho("Error: Could not connect to the server.", fg="red")
 
 if __name__ == '__main__':
     cli()

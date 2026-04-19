@@ -83,11 +83,13 @@ def create_team():
     if not team_name:
         return jsonify({'error': 'No team specified'}), 400
     
-    if Team.query.filter_by(name=team_name).first():
+    slug = Team.generate_slug(team_name)
+    
+    if Team.query.filter_by(slug=slug).first():
         return jsonify({'error': 'Team with this name already exists'}), 409
     
     try:
-        new_team = Team(name=team_name)
+        new_team = Team(name=team_name, slug=slug)
         db.session.add(new_team)
         
         db.session.flush()
@@ -186,16 +188,17 @@ def save_secret():
 @jwt_required()
 def get_secrets():
     user_id = int(get_jwt_identity())
-    team_id = int(request.args.get('team_id'))
+    team_slug = request.args.get('team')
 
-    if not team_id:
-        return jsonify({'error': 'No team_id'}), 400
+    team = Team.query.filter_by(slug=team_slug).first()
+    if not team:
+        return jsonify({'eror': 'Team not found'}), 404
     
-    membership = TeamMembership.query.filter_by(user_id = user_id, team_id = team_id).first()
+    membership = TeamMembership.query.filter_by(user_id = user_id, team_id = team.id).first()
     if not membership:
         return jsonify({'error': 'UNAUTHORIZED: not a team member'}), 400
     
-    vault = Vault.query.filter_by(team_id = team_id).first()
+    vault = Vault.query.filter_by(team_id = team.id).first()
     if not vault:
         return jsonify({'error': 'No secrets yet for this team'}), 404
     
@@ -204,7 +207,7 @@ def get_secrets():
         return jsonify({'error': 'No access key found for this user in this vault'}), 403
 
     return jsonify({
-        'team_id': team_id,
+        'team_id': team.id,
         'version': vault.version,
         'env_blob': vault.encrypted_blob,
         'encrypted_key': user_vault_key.encrypted_key,
