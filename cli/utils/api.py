@@ -1,6 +1,7 @@
 import os
 import json
-from cli.utils.config import TOKEN_FILE
+import requests
+from cli.utils.config import TOKEN_FILE, BASE_URL
 
 def save_token(token):
     """Saves the JWT to a local hidden file."""
@@ -14,3 +15,93 @@ def get_token():
     with open(TOKEN_FILE, 'r') as f:
         data = json.load(f)
         return data.get("access_token")
+
+def get_auth_headers():
+    """Helper to inject the JWT into the request headers."""
+    token = get_token()
+    if not token:
+        return None
+    return {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+
+# --- New Envelope Encryption Endpoints ---
+
+def create_team_api(team_name, env_blob, encrypted_key):
+    """Sends the initial encrypted payload and the Admin's envelope to the server."""
+    headers = get_auth_headers()
+    if not headers:
+        return None
+
+    payload = {
+        "name": team_name,
+        "env_blob": env_blob,
+        "encrypted_key": encrypted_key
+    }
+    
+    return requests.post(f"{BASE_URL}/teams", json=payload, headers=headers)
+
+def push_vault_api(team_id, env_blob):
+    """O(1) Scaling: Sends ONLY the updated vault payload to the server."""
+    headers = get_auth_headers()
+    if not headers:
+        return None
+
+    payload = {
+        "team_id": team_id,
+        "env_blob": env_blob
+    }
+    
+    return requests.post(f"{BASE_URL}/vault", json=payload, headers=headers)
+
+def pull_vault_api(team_slug):
+    """Fetches the encrypted vault payload and the user's specific envelope."""
+    headers = get_auth_headers()
+    if not headers:
+        return None
+
+    return requests.get(f"{BASE_URL}/vault?team={team_slug}", headers=headers)
+
+def prepare_add_member_api(team_slug, email):
+    """Fetches the target user's public key after admin authorization checks."""
+    headers = get_auth_headers()
+    if not headers:
+        return None
+
+    return requests.post(
+        f"{BASE_URL}/teams/{team_slug}/members/prepare",
+        json={"email": email},
+        headers=headers
+    )
+
+def confirm_add_member_api(team_slug, target_user_id, encrypted_key):
+    """Completes membership creation with a client-wrapped team vault key."""
+    headers = get_auth_headers()
+    if not headers:
+        return None
+
+    return requests.post(
+        f"{BASE_URL}/teams/{team_slug}/members/confirm",
+        json={
+            "target_user_id": target_user_id,
+            "encrypted_key": encrypted_key,
+        },
+        headers=headers
+    )
+
+def list_teams_api():
+    """Lists the teams available to the currently logged-in user."""
+    headers = get_auth_headers()
+    if not headers:
+        return None
+
+    return requests.get(f"{BASE_URL}/teams", headers=headers)
+
+def leave_team_api(team_slug):
+    """Removes the current user from a team when permitted."""
+    headers = get_auth_headers()
+    if not headers:
+        return None
+
+    return requests.delete(f"{BASE_URL}/teams/{team_slug}/members/me", headers=headers)

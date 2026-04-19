@@ -3,8 +3,9 @@ from flask_cors import CORS
 from flask_migrate import Migrate
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-from db_models import db, User, Team, TeamMembership, Vault, VaultKey
-from datetime import datetime, timezone
+from sqlalchemy.exc import IntegrityError
+from db_models import db, User, Team, TeamMembership, VaultKey
+from datetime import timedelta
 
 import os
 from dotenv import load_dotenv
@@ -14,11 +15,12 @@ load_dotenv()
 
 # postgresql://[user]:[password]@[host]:[port]/[database_name]
 # config
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@localhost:5432/envsync_db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # jwt config
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_KEY')
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=30)
 
 CORS(app)
 bcrypt = Bcrypt(app)
@@ -27,6 +29,23 @@ db.init_app(app)
 migrate = Migrate(app, db)
 
 ############################## endpoints ################################
+
+def get_team_by_slug(team_slug):
+    return Team.query.filter_by(slug=team_slug).first()
+
+def get_membership(team_id, user_id):
+    return TeamMembership.query.filter_by(team_id=team_id, user_id=user_id).first()
+
+def get_admin_membership(team_id, user_id):
+    return TeamMembership.query.filter_by(team_id=team_id, user_id=user_id, role='admin').first()
+
+def get_user_by_email(email):
+    if not email:
+        return None
+    return User.query.filter_by(email=email.strip().lower()).first()
+
+def get_user_or_404(user_id):
+    return User.query.get(user_id)
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -41,7 +60,7 @@ def register():
     hash = bcrypt.generate_password_hash(data['password'])
     hashed_pw = hash.decode('utf-8')
 
-    user = User(email = data['email'], password_hash = hashed_pw)
+    user = User(email=data['email'].strip().lower(), password_hash=hashed_pw)
 
     try: 
         db.session.add(user)
@@ -80,8 +99,13 @@ def create_team():
     data = request.get_json()
 
     team_name = data.get('name')
+    env_blob = data.get('env_blob', '') # encrypted vault payload
+    encrypted_key = data.get('encrypted_key') # The Vault Key wrapped in Admin's RSA Public Key
+
     if not team_name:
         return jsonify({'error': 'No team specified'}), 400
+    if not encrypted_key:
+        return jsonify({'error': 'Must provide the initial encrypted_key envelope'}), 400
     
     slug = Team.generate_slug(team_name)
     
@@ -89,24 +113,33 @@ def create_team():
         return jsonify({'error': 'Team with this name already exists'}), 409
     
     try:
-        new_team = Team(name=team_name, slug=slug)
+        new_team = Team(name=team_name, slug=slug, env_blob=env_blob)
         db.session.add(new_team)
-        
-        db.session.flush()
+        db.session.flush() # new team id
 
+        # created added as admin
         membership = TeamMembership(
-            user_id = current_user_id,
-            team_id= new_team.id,
-            role = 'admin'
+            user_id=current_user_id,
+            team_id=new_team.id,
+            role='admin'
         )
         db.session.add(membership)
+
+        # save admins envelope
+        vault_key = VaultKey(
+            team_id=new_team.id,
+            user_id=current_user_id,
+            encrypted_key=encrypted_key
+        )
+        db.session.add(vault_key)
 
         db.session.commit()
 
         return jsonify({
-            'message': f'Team {team_name} successfully created.',
-            'team_id': new_team.id
-        }), 200
+            'message': f'Team {team_name} successfully created with persistent vault key.',
+            'team_id': new_team.id,
+            'slug': new_team.slug
+        }), 201
     
     except Exception as e:
         db.session.rollback()
@@ -119,7 +152,7 @@ def create_team():
 @app.route('/teams', methods=['GET'])
 @jwt_required()
 def list_teams():
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
 
     memberships = TeamMembership.query.filter_by(user_id=current_user_id).all()
 
@@ -129,55 +162,184 @@ def list_teams():
         if team:
             teams.append({
                 'team_id': team.id,
+                'team_slug': team.slug,
                 'team_name': team.name,
                 'role': membership.role,
-                'joined_at': team.joined_timestamp
+                'joined_at': membership.joined_timestamp
             })
     return jsonify({
         'teams': teams
     }), 200
 
+@app.route('/teams/<string:team_slug>/members/me', methods=['DELETE'])
+@jwt_required()
+def leave_team(team_slug):
+    current_user_id = int(get_jwt_identity())
+
+    team = get_team_by_slug(team_slug)
+    if not team:
+        return jsonify({'error': 'Team not found'}), 404
+
+    membership = get_membership(team.id, current_user_id)
+    if not membership:
+        return jsonify({'error': 'UNAUTHORIZED: not a team member'}), 403
+
+    remaining_memberships = TeamMembership.query.filter(
+        TeamMembership.team_id == team.id,
+        TeamMembership.user_id != current_user_id
+    ).all()
+
+    is_last_admin = (
+        membership.role == 'admin' and
+        not any(other.role == 'admin' for other in remaining_memberships)
+    )
+
+    if is_last_admin and remaining_memberships:
+        return jsonify({
+            'error': 'Cannot leave team as the last admin while other members still belong to it'
+        }), 409
+
+    try:
+        VaultKey.query.filter_by(team_id=team.id, user_id=current_user_id).delete()
+        db.session.delete(membership)
+
+        deleted_team = False
+        if not remaining_memberships:
+            db.session.delete(team)
+            deleted_team = True
+
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
+
+    return jsonify({
+        'message': 'Left team successfully',
+        'team_slug': team.slug,
+        'deleted_team': deleted_team,
+    }), 200
+
+@app.route('/teams/<string:team_slug>/members/prepare', methods=['POST'])
+@jwt_required()
+def prepare_add_member(team_slug):
+    current_user_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    email = (data.get('email') or '').strip().lower()
+
+    if not email:
+        return jsonify({'error': 'Missing email'}), 400
+
+    team = get_team_by_slug(team_slug)
+    if not team:
+        return jsonify({'error': 'Team not found'}), 404
+
+    if not get_admin_membership(team.id, current_user_id):
+        return jsonify({'error': 'UNAUTHORIZED: admin access required'}), 403
+
+    target_user = get_user_by_email(email)
+    if not target_user:
+        return jsonify({'error': 'User not found'}), 404
+
+    if not target_user.public_key:
+        return jsonify({'error': 'User has not uploaded a public key yet'}), 409
+
+    if get_membership(team.id, target_user.id):
+        return jsonify({'error': 'User is already a member of this team'}), 409
+
+    return jsonify({
+        'team_id': team.id,
+        'team_slug': team.slug,
+        'team_name': team.name,
+        'target_user': {
+            'id': target_user.id,
+            'email': target_user.email,
+            'public_key': target_user.public_key,
+        }
+    }), 200
+
+@app.route('/teams/<string:team_slug>/members/confirm', methods=['POST'])
+@jwt_required()
+def confirm_add_member(team_slug):
+    current_user_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    target_user_id = data.get('target_user_id')
+    encrypted_key = data.get('encrypted_key')
+
+    if not target_user_id or not encrypted_key:
+        return jsonify({'error': 'Missing target_user_id or encrypted_key'}), 400
+
+    team = get_team_by_slug(team_slug)
+    if not team:
+        return jsonify({'error': 'Team not found'}), 404
+
+    if not get_admin_membership(team.id, current_user_id):
+        return jsonify({'error': 'UNAUTHORIZED: admin access required'}), 403
+
+    target_user = get_user_or_404(target_user_id)
+    if not target_user:
+        return jsonify({'error': 'User not found'}), 404
+
+    if not target_user.public_key:
+        return jsonify({'error': 'User has not uploaded a public key yet'}), 409
+
+    if get_membership(team.id, target_user.id):
+        return jsonify({'error': 'User is already a member of this team'}), 409
+
+    membership = TeamMembership(
+        user_id=target_user.id,
+        team_id=team.id,
+        role='member'
+    )
+    vault_key = VaultKey(
+        team_id=team.id,
+        user_id=target_user.id,
+        encrypted_key=encrypted_key
+    )
+
+    try:
+        db.session.add(membership)
+        db.session.add(vault_key)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'User is already a member of this team'}), 409
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
+
+    return jsonify({
+        'message': 'Member added successfully',
+        'team_id': team.id,
+        'team_slug': team.slug,
+        'user_id': target_user.id,
+        'email': target_user.email,
+    }), 201
+
 @app.route('/vault', methods=['POST'])
 @jwt_required()
 def save_secret():
-    # 1. Cast user_id to int to ensure DB compatibility
     user_id = int(get_jwt_identity()) 
     data = request.get_json()
+    
     team_id = data.get('team_id')
     env_blob = data.get('env_blob')
-    encrypted_keys = data.get('encrypted_keys', {})
 
     if not team_id or not env_blob:
-        return jsonify({'error': 'Missing team_id or encrypted_blob'}), 400
+        return jsonify({'error': 'Missing team_id or env_blob'}), 400
 
     membership = TeamMembership.query.filter_by(user_id=user_id, team_id=team_id).first()
     if not membership:
         return jsonify({'error': 'UNAUTHORIZED: not a team member'}), 403
     
     try:
-        vault = Vault.query.filter_by(team_id=team_id).first()
-        if vault:
-            vault.encrypted_blob = env_blob
-            vault.version += 1
-            vault.updated_at = datetime.now(timezone.utc)
-        else:
-            vault = Vault(team_id=team_id, encrypted_blob=env_blob)
-            db.session.add(vault)
-        
-        db.session.flush() 
+        team = Team.query.get(team_id)
+        if not team:
+            return jsonify({'error': 'Team not found'}), 404
 
-        VaultKey.query.filter_by(vault_id=vault.id).delete()
-
-        for uid_str, enc_key in encrypted_keys.items():
-            new_vault_key = VaultKey(
-                vault_id=vault.id, 
-                user_id=int(uid_str), 
-                encrypted_key=enc_key
-            )
-            db.session.add(new_vault_key)
-
+        team.env_blob = env_blob
         db.session.commit()
-        return jsonify({'message': f'Vault securely updated to version {vault.version}'}), 200
+        
+        return jsonify({'message': 'Vault securely updated'}), 200
     
     except Exception as e:
         db.session.rollback()
@@ -192,26 +354,21 @@ def get_secrets():
 
     team = Team.query.filter_by(slug=team_slug).first()
     if not team:
-        return jsonify({'eror': 'Team not found'}), 404
+        return jsonify({'error': 'Team not found'}), 404
     
-    membership = TeamMembership.query.filter_by(user_id = user_id, team_id = team.id).first()
+    membership = TeamMembership.query.filter_by(user_id=user_id, team_id=team.id).first()
     if not membership:
-        return jsonify({'error': 'UNAUTHORIZED: not a team member'}), 400
+        return jsonify({'error': 'UNAUTHORIZED: not a team member'}), 403
     
-    vault = Vault.query.filter_by(team_id = team.id).first()
-    if not vault:
-        return jsonify({'error': 'No secrets yet for this team'}), 404
-    
-    user_vault_key = VaultKey.query.filter_by(vault_id=vault.id, user_id=user_id).first()
+    # Grab the specific envelope for THIS user
+    user_vault_key = VaultKey.query.filter_by(team_id=team.id, user_id=user_id).first()
     if not user_vault_key:
         return jsonify({'error': 'No access key found for this user in this vault'}), 403
 
     return jsonify({
         'team_id': team.id,
-        'version': vault.version,
-        'env_blob': vault.encrypted_blob,
+        'env_blob': team.env_blob,
         'encrypted_key': user_vault_key.encrypted_key,
-        'updated_at': vault.updated_at
     }), 200
         
 
@@ -255,4 +412,5 @@ def get_team_keys(team_id):
     return jsonify({'keys': keys}), 200
 
 if __name__ == '__main__':
-    app.run(debug=True, port=7070)
+    port = int(os.environ.get("PORT", 7070))
+    app.run(host='0.0.0.0', port=port)

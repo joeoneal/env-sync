@@ -10,3 +10,4 @@ dotenv
 cryptography
 click
 requests
+gunicorn
