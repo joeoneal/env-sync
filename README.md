@@ -31,3 +31,4 @@ There are commercial tools that have been released to solve this issue for teams
 
 ## Proposed Solution
 I aim to create a tool with an easy to use **command line interface**. It will fall into a nice middle ground of being much more secure than a simple chat in a messaging app, but not as complex and expensive as a deployed service from a giant corporation.
+
