@@ -1,13 +1,13 @@
 import click
 from cli.commands.auth import register, login, logout, whoami
 from cli.commands.vault import push, pull
-from cli.commands.team import create_team, add_member, list_teams, leave_team, delete_team, promote, demote
+from cli.commands.team import create_team, add_member, list_teams, leave_team, delete_team, promote, demote, team_shell
 
 CONTEXT_SETTINGS = dict(max_content_width=300)
 
 class Ordered(click.Group):
     def list_commands(self, ctx):
-        return ['register', 'login', 'logout', 'whoami', 'create-team', 'add-member', 'promote', 'demote', 'push', 'pull', 'list-teams', 'leave-team', 'delete-team']
+        return ['register', 'login', 'logout', 'whoami', 'create-team', 'add-member', 'promote', 'demote', 'push', 'pull', 'list-teams', 'leave-team', 'delete-team', 'team']
 
 @click.group(context_settings=CONTEXT_SETTINGS, cls=Ordered)
 def cli():
@@ -27,6 +27,7 @@ cli.add_command(leave_team)
 cli.add_command(logout)
 cli.add_command(whoami)
 cli.add_command(delete_team)
+cli.add_command(team_shell)
 
 if __name__ == '__main__':
     cli()
