@@ -7,7 +7,7 @@ from cli.utils.crypto import CryptoEngine
 @click.command()
 @click.option('--team', required=True, help='The slug of the team vault')
 def push(team):
-    """Encrypts local .env and pushes it to the team vault."""
+    """--team <team slug>"""
     token = get_token()
     if not token:
         click.secho("Error: You must be logged in to push secrets.", fg="red")
@@ -69,7 +69,7 @@ def push(team):
 @click.command()
 @click.option('--team', required=True, help='The slug of the team vault')
 def pull(team):
-    """Pulls the encrypted .env from the team vault and decrypts it."""
+    """--team <team slug>"""
     token = get_token()
     if not token:
         click.secho("Error: You must be logged in to pull secrets.", fg="red")

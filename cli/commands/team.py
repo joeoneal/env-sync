@@ -27,7 +27,7 @@ def get_error_message(response):
 @click.command()
 @click.option('--name', required=True, help='The human-readable name of your new team (e.g. "Project Apollo")')
 def create_team(name):
-    """Creates a new team, generates the vault key, and encrypts your initial .env file."""
+    """--name <team name>"""
     token = get_token()
     if not token:
         click.secho("Error: You must be logged in to create a team.", fg="red")
@@ -66,7 +66,7 @@ def create_team(name):
             data = res.json()
             slug = data.get('slug')
             click.secho(f"Success! Team created and vault secured.", fg="green")
-            click.secho(f"Your team slug is: {slug}", fg="cyan", bold=True)
+            click.secho(f"Your team name is: {slug}", fg="cyan", bold=True)
             click.echo(f"You can now push secrets using: envsync push --team {slug}")
         else:
             msg = get_error_message(res)
@@ -79,7 +79,7 @@ def create_team(name):
 @click.option('--team', required=True, help='The slug of the team vault')
 @click.option('--email', required=True, help='The registered email address of the user to add')
 def add_member(team, email):
-    """Adds a registered user to a team by wrapping the existing vault key for them locally."""
+    """--team <team slug> --email <email of new member>"""
     token = get_token()
     if not token:
         click.secho("Error: You must be logged in to add a team member.", fg="red")
@@ -140,7 +140,7 @@ def add_member(team, email):
 
 @click.command(name='list-teams')
 def list_teams():
-    """Lists the teams the current user belongs to."""
+    """NO FLAGS NEEDED"""
     token = get_token()
     if not token:
         click.secho("Error: You must be logged in to list teams.", fg="red")
@@ -168,7 +168,7 @@ def list_teams():
 @click.command(name='leave-team')
 @click.option('--team', required=True, help='The slug of the team to leave')
 def leave_team(team):
-    """Leaves a team and removes your wrapped vault key from it."""
+    """--team <team slug>"""
     token = get_token()
     if not token:
         click.secho("Error: You must be logged in to leave a team.", fg="red")

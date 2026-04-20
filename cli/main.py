@@ -3,7 +3,9 @@ from cli.commands.auth import register, login
 from cli.commands.vault import push, pull
 from cli.commands.team import create_team, add_member, list_teams, leave_team
 
-@click.group()
+CONTEXT_SETTINGS = dict(max_content_width=300)
+
+@click.group(context_settings=CONTEXT_SETTINGS)
 def cli():
     """Env-Sync: Securely manage your .env files across teams."""
     pass

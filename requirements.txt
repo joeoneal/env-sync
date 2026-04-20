@@ -11,3 +11,4 @@ cryptography
 click
 requests
 gunicorn
+email_validator

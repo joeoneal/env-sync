@@ -36,8 +36,11 @@ class Team(db.Model):
     @staticmethod
     def generate_slug(name):
         """Converts 'My Team' to 'my-team'"""
-        return re.sub(r'[\s_]+', '-', re.sub(r'[^\w\s-]', '', name).lower()).strip('-')
-    
+        slug = re.sub(r'[\s_]+', '-', re.sub(r'[^\w\s-]', '', name).lower()).strip('-')
+        if name != slug:
+            print('Team names with spaces or capitalization are converted to a standard format:')
+        return slug
+
 class TeamMembership(db.Model):
     __tablename__ = 'team_memberships'
     __table_args__ = (

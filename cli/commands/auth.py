@@ -4,11 +4,23 @@ from cli.utils.config import BASE_URL
 from cli.utils.api import save_token
 from cli.utils.crypto import gen_keypair_if_none
 
+from email_validator import validate_email as lib_validate_email, EmailNotValidError
+
+## email validation helper ##
+
+def validate_email(_ctx, _param, value):
+    try:
+        info = lib_validate_email(value, check_deliverability=True)
+        return info.normalized
+    except EmailNotValidError as e:
+        raise click.BadParameter(str(e))
+
+
 @click.command()
-@click.option('--email', prompt='Email', help='Your email address.')
+@click.option('--email', prompt='Email', callback=validate_email, help='Your email address.')
 @click.password_option(help='Choose a strong password.')
 def register(email, password):
-    """Create a new Env-Sync account."""
+    """--email <email>"""
     click.echo(f"Registering account for {email}...")
     
     try:
@@ -34,9 +46,9 @@ def register(email, password):
 
 @click.command()
 @click.option('--email', prompt='Email', help='Your registered email.')
-@click.password_option(help='Your password.') # Automatically masks password input
+@click.option('--password', prompt=True, hide_input=True, help='Your password.') 
 def login(email, password):
-    """Log in to Env-Sync and get an access token."""
+    """--email <email>"""
     click.echo(f"Attempting to log in as {email}...")
     
     try:
@@ -51,7 +63,10 @@ def login(email, password):
             gen_keypair_if_none(token)
             click.secho("Success! Logged in and token saved locally.", fg="green")
         else:
-            msg = response.json().get('message', 'Unknown error')
+            try:
+                msg = response.json().get('error', 'Invalid email or password.')
+            except ValueError:
+                msg = response.text or 'Invalid email or password.'
             click.secho(f"Login failed: {msg}", fg="red")
             
     except requests.exceptions.ConnectionError:

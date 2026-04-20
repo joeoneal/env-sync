@@ -6,6 +6,7 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 from sqlalchemy.exc import IntegrityError
 from db_models import db, User, Team, TeamMembership, VaultKey
 from datetime import timedelta
+from email_validator import validate_email as lib_validate_email, EmailNotValidError
 
 import os
 from dotenv import load_dotenv
@@ -54,13 +55,25 @@ def register():
     if not data or not data.get('email') or not data.get('password'):
         return jsonify({'error': 'Missing email or password'}), 400
     
-    if User.query.filter_by(email=data['email']).first():
-        return jsonify({'error': 'User already exists with this email'}), 409
+    email = data.get('email')
+    password = data.get('password')
     
+    try:
+        valid = lib_validate_email(email, check_deliverability=True)
+        normalized_email = valid.normalized
+    except EmailNotValidError as _:
+        return jsonify({'error': 'Please try again with a valid email address!'}), 400
+    
+    if len(password) < 6:
+        return jsonify({'error': 'Password must be at least 6 characters in length'}), 400
+    
+    if User.query.filter_by(email=normalized_email).first():
+        return jsonify({'error': 'An account has already been created with this email!'}), 409
+
     hash = bcrypt.generate_password_hash(data['password'])
     hashed_pw = hash.decode('utf-8')
 
-    user = User(email=data['email'].strip().lower(), password_hash=hashed_pw)
+    user = User(email=normalized_email, password_hash=hashed_pw)
 
     try: 
         db.session.add(user)
@@ -68,11 +81,12 @@ def register():
         return jsonify({'message' : 'User created successfully.'}), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error' : 'Database error as follows', 'details' : str(e)}), 500
+        print(f'CRITICAL DB ERROR DURING REGISTRATION: {e}')
+        return jsonify({'error' : 'An internal server error occured! Please try again.'}), 500
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
+    data = request.get_json() or {}
 
     email = data.get('email')
     password = data.get('password')
@@ -80,7 +94,14 @@ def login():
     if not data or not email or not password:
         return jsonify({'error': 'Missing email or password'}), 400
     
-    user = User.query.filter_by(email=data['email']).first()
+    try:
+        valid = lib_validate_email(email, check_deliverability=False)
+        email = valid.normalized
+    except EmailNotValidError:
+        # If it's a completely invalid string, they definitely don't have an account
+        return jsonify({'error': 'Invalid username or password'}), 401
+    
+    user = User.query.filter_by(email=email).first()
 
     if not user or not bcrypt.check_password_hash(user.password_hash, password):
         return jsonify({'error': 'Invalid username or password'}), 401

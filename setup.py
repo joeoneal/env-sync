@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='envsync',
+    name='envsync-vault',
     version='0.0.1a1',  # Bumped to a1 so PyPI accepts it if you already pushed 'a'
     # THIS IS THE MAGIC FIX:
     packages=find_packages(include=['cli', 'cli.*']),
