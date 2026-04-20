@@ -156,6 +156,67 @@ class AddMemberFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.get_json()['error'], 'UNAUTHORIZED: admin access required')
 
+    def test_update_member_role_promotes_member_to_admin(self):
+        db.session.add(
+            TeamMembership(user_id=self.member.id, team_id=self.team.id, role='member')
+        )
+        db.session.commit()
+
+        response = self.client.patch(
+            f'/teams/{self.team.slug}/members/role',
+            json={'email': self.member.email, 'role': 'admin'},
+            headers=self.auth_headers(self.admin.id),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        updated_membership = TeamMembership.query.filter_by(
+            team_id=self.team.id, user_id=self.member.id
+        ).first()
+        self.assertEqual(updated_membership.role, 'admin')
+
+    def test_update_member_role_requires_admin(self):
+        db.session.add(
+            TeamMembership(user_id=self.member.id, team_id=self.team.id, role='member')
+        )
+        db.session.commit()
+
+        response = self.client.patch(
+            f'/teams/{self.team.slug}/members/role',
+            json={'email': self.member.email, 'role': 'admin'},
+            headers=self.auth_headers(self.outsider.id),
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()['error'], 'UNAUTHORIZED: admin access required')
+
+    def test_update_member_role_blocks_demoting_last_admin(self):
+        response = self.client.patch(
+            f'/teams/{self.team.slug}/members/role',
+            json={'email': self.admin.email, 'role': 'member'},
+            headers=self.auth_headers(self.admin.id),
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.get_json()['error'], 'Cannot demote the last admin')
+
+    def test_update_member_role_allows_demoting_when_other_admin_exists(self):
+        db.session.add(
+            TeamMembership(user_id=self.member.id, team_id=self.team.id, role='admin')
+        )
+        db.session.commit()
+
+        response = self.client.patch(
+            f'/teams/{self.team.slug}/members/role',
+            json={'email': self.admin.email, 'role': 'member'},
+            headers=self.auth_headers(self.admin.id),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        updated_membership = TeamMembership.query.filter_by(
+            team_id=self.team.id, user_id=self.admin.id
+        ).first()
+        self.assertEqual(updated_membership.role, 'member')
+
     def test_list_teams_returns_membership_metadata(self):
         response = self.client.get(
             '/teams',

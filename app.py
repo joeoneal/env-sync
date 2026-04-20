@@ -40,6 +40,13 @@ def get_membership(team_id, user_id):
 def get_admin_membership(team_id, user_id):
     return TeamMembership.query.filter_by(team_id=team_id, user_id=user_id, role='admin').first()
 
+def get_other_admin_membership(team_id, excluded_user_id):
+    return TeamMembership.query.filter(
+        TeamMembership.team_id == team_id,
+        TeamMembership.user_id != excluded_user_id,
+        TeamMembership.role == 'admin'
+    ).first()
+
 def get_user_by_email(email):
     if not email:
         return None
@@ -336,6 +343,62 @@ def confirm_add_member(team_slug):
         'email': target_user.email,
     }), 201
 
+@app.route('/teams/<string:team_slug>/members/role', methods=['PATCH'])
+@jwt_required()
+def update_member_role(team_slug):
+    current_user_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    email = (data.get('email') or '').strip().lower()
+    new_role = data.get('role')
+
+    if not email:
+        return jsonify({'error': 'Missing email'}), 400
+
+    if new_role not in ('admin', 'member'):
+        return jsonify({'error': 'Invalid role'}), 400
+
+    team = get_team_by_slug(team_slug)
+    if not team:
+        return jsonify({'error': 'Team not found'}), 404
+
+    if not get_admin_membership(team.id, current_user_id):
+        return jsonify({'error': 'UNAUTHORIZED: admin access required'}), 403
+
+    target_user = get_user_by_email(email)
+    if not target_user:
+        return jsonify({'error': 'User not found'}), 404
+
+    target_membership = get_membership(team.id, target_user.id)
+    if not target_membership:
+        return jsonify({'error': 'User is not a member of this team'}), 404
+
+    if target_membership.role == new_role:
+        return jsonify({
+            'message': 'Role already set',
+            'team_slug': team.slug,
+            'email': target_user.email,
+            'role': new_role,
+        }), 200
+
+    if target_membership.role == 'admin' and new_role == 'member':
+        if not get_other_admin_membership(team.id, target_user.id):
+            return jsonify({'error': 'Cannot demote the last admin'}), 409
+
+    target_membership.role = new_role
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
+
+    return jsonify({
+        'message': 'Role updated successfully',
+        'team_slug': team.slug,
+        'email': target_user.email,
+        'role': new_role,
+    }), 200
+
 @app.route('/vault', methods=['POST'])
 @jwt_required()
 def save_secret():
@@ -347,6 +410,9 @@ def save_secret():
 
     if not team_id or not env_blob:
         return jsonify({'error': 'Missing team_id or env_blob'}), 400
+    
+    if not get_admin_membership(team.id, user_id):
+        return jsonify({'error': 'UNAUTHORIZED: admin access required to push'}), 403
 
     membership = TeamMembership.query.filter_by(user_id=user_id, team_id=team_id).first()
     if not membership:

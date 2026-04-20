@@ -9,7 +9,8 @@ from cli.utils.api import (
     pull_vault_api,
     prepare_add_member_api,
     confirm_add_member_api,
-    delete_team_api
+    delete_team_api,
+    update_member_role_api
 )
 from cli.utils.crypto import CryptoEngine
 from cli.utils.config import PRIVATE_KEY_FILE, PUBLIC_KEY_FILE
@@ -211,15 +212,50 @@ def delete_team(team):
         try: 
             response = delete_team_api(team)
             if response is not None and response.status_code == 200:
+                click.clear()
                 click.secho(f"Team {team} successfully deleted", fg="green")
             else:
                 msg = get_error_message(response)
                 click.clear()
                 click.secho(f"Failed to delete team {team}: {msg}", fg="red")
         except Exception as e:
+            click.clear()
             click.secho(f"An unexpected error occurred: {str(e)}", fg="red")
 
     else: 
         click.echo('Aborted.')
         return
 
+@click.command(name='promote')
+@click.option('--team', required=True, help='The slug of the team')
+@click.option('--email', required=True, help='The registered email address of the member to promote')
+def promote(team, email):
+    """--team <team slug> --email <member email>"""
+    token = get_token()
+    if not token:
+        click.secho("Error: You must be logged in to promote a team member.", fg="red")
+        return
+
+    response = update_member_role_api(team, email, 'admin')
+    if response is not None and response.status_code == 200:
+        click.secho(f"Success! {email} is now an admin of {team}.", fg="green")
+    else:
+        msg = get_error_message(response)
+        click.secho(f"Failed to promote member: {msg}", fg="red")
+
+@click.command(name='demote')
+@click.option('--team', required=True, help='The slug of the team')
+@click.option('--email', required=True, help='The registered email address of the admin to demote')
+def demote(team, email):
+    """--team <team slug> --email <member email>"""
+    token = get_token()
+    if not token:
+        click.secho("Error: You must be logged in to demote a team member.", fg="red")
+        return
+
+    response = update_member_role_api(team, email, 'member')
+    if response is not None and response.status_code == 200:
+        click.secho(f"Success! {email} is now a member of {team}.", fg="green")
+    else:
+        msg = get_error_message(response)
+        click.secho(f"Failed to demote member: {msg}", fg="red")

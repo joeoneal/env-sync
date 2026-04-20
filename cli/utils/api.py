@@ -124,3 +124,15 @@ def delete_team_api(team_slug):
         return None
 
     return requests.delete(f"{BASE_URL}/teams/{team_slug}", headers=headers)
+
+def update_member_role_api(team_slug, email, role):
+    """Promotes or demotes an existing team member by email."""
+    headers = get_auth_headers()
+    if not headers:
+        return None
+
+    return requests.patch(
+        f"{BASE_URL}/teams/{team_slug}/members/role",
+        json={"email": email, "role": role},
+        headers=headers
+    )
