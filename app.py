@@ -443,6 +443,31 @@ def who_am_i():
     
     return jsonify({'email': user.email}), 200
 
+@app.route('/teams/<string:team_slug>', methods=['DELETE'])
+@jwt_required()
+def delete_team(team_slug):
+    current_user_id = int(get_jwt_identity())
+
+    team = get_team_by_slug(team_slug)
+    if not team:
+        return jsonify({'error': 'Team not found'}), 404
+
+    admin_membership = get_admin_membership(team.id, current_user_id)
+    if not admin_membership:
+        return jsonify({'error': 'UNAUTHORIZED: admin access required'}), 403
+
+    try:
+        db.session.delete(team)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
+
+    return jsonify({
+        'message': 'Team deleted successfully',
+        'team_slug': team.slug,
+    }), 200
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 7070))
     app.run(host='0.0.0.0', port=port)

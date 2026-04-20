@@ -116,3 +116,11 @@ def leave_team_api(team_slug):
         return None
 
     return requests.delete(f"{BASE_URL}/teams/{team_slug}/members/me", headers=headers)
+
+def delete_team_api(team_slug):
+    """Deletes the specified team by slug."""
+    headers = get_auth_headers()
+    if not headers:
+        return None
+
+    return requests.delete(f"{BASE_URL}/teams/{team_slug}", headers=headers)

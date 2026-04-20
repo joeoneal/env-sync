@@ -1,5 +1,6 @@
 import os
 import click
+from halo import Halo
 from cli.utils.api import (
     get_token,
     create_team_api,
@@ -8,6 +9,7 @@ from cli.utils.api import (
     pull_vault_api,
     prepare_add_member_api,
     confirm_add_member_api,
+    delete_team_api
 )
 from cli.utils.crypto import CryptoEngine
 from cli.utils.config import PRIVATE_KEY_FILE, PUBLIC_KEY_FILE
@@ -32,8 +34,11 @@ def create_team(name):
     if not token:
         click.secho("Error: You must be logged in to create a team.", fg="red")
         return
+    
+    ## loading state 
+    spinner = Halo(text=f'Creating team {name}...', spinner='flip')
+    spinner.start()
 
-    # 1. Read the local .env file (or default to empty if it doesn't exist yet)
     if not os.path.exists('.env'):
         click.secho("No .env file found in current directory. Initializing an empty vault.", fg="yellow")
         env_text = ""
@@ -43,13 +48,14 @@ def create_team(name):
 
     # 2. Grab the local Public Key (to create the Admin's envelope)
     if not os.path.exists(PUBLIC_KEY_FILE):
+        spinner.stop()
         click.secho("Error: Local public key not found. Please log in or generate keys first.", fg="red")
         return
         
     with open(PUBLIC_KEY_FILE, 'r') as f:
         public_key_pem = f.read()
 
-    click.echo("Generating end-to-end encryption keys and wrapping payload...")
+    click.secho("Generating end-to-end encryption keys and wrapping payload...", fg='black')
 
     try:
         # 3. The Cryptography Engine
@@ -57,22 +63,25 @@ def create_team(name):
         env_blob = CryptoEngine.encrypt_env(env_text, vault_key)
         encrypted_key = CryptoEngine.wrap_key(vault_key, public_key_pem)
         
-        click.echo(f"Creating team '{name}' on server...")
-        
         # 4. Send it up using our clean API layer
         res = create_team_api(name, env_blob, encrypted_key)
         
         if res is not None and res.status_code == 201:
             data = res.json()
             slug = data.get('slug')
-            click.secho(f"Success! Team created and vault secured.", fg="green")
+            click.clear()
+            spinner.stop()
+            click.secho(f"Success! ", fg="green", nl=False)
+            click.secho("Team created and vault secured.")
             click.secho(f"Your team name is: {slug}", fg="cyan", bold=True)
-            click.echo(f"You can now push secrets using: envsync push --team {slug}")
+            click.secho(f"You can now push secrets using: envsync push --team {slug}", fg='black')
         else:
             msg = get_error_message(res)
+            click.clear()
             click.secho(f"Failed to create team: {msg}", fg="red")
             
     except Exception as e:
+        spinner.stop()
         click.secho(f"An unexpected error occurred: {str(e)}", fg="red")
 
 @click.command(name='add-member')
@@ -166,7 +175,7 @@ def list_teams():
         click.echo(f"- {team_name} ({team_slug}) [{role}] joined {joined_at}")
 
 @click.command(name='leave-team')
-@click.option('--team', required=True, help='The slug of the team to leave')
+@click.option('--team', required=True, help='The name of the team you would like to leave')
 def leave_team(team):
     """--team <team slug>"""
     token = get_token()
@@ -186,4 +195,31 @@ def leave_team(team):
         click.secho(f"Success! You left {team}, and the empty team was deleted.", fg="green")
     else:
         click.secho(f"Success! You left {team}.", fg="green")
+
+@click.command(name='delete-team')
+@click.option('--team', required=True, help='The slug of the team that you would like to delete')
+def delete_team(team):
+    """--team <team slug>"""
+    token = get_token()
+    if not token:
+        click.secho("Error: You must be logged in to delete a team.", fg="red")
+        return
+
+    warning = click.style('WARNING: This is a destructive action. Deleted teams cannot be recovered. Are you sure you would like to proceed?', fg='red', bold=True)
+
+    if click.confirm(warning):
+        try: 
+            response = delete_team_api(team)
+            if response is not None and response.status_code == 200:
+                click.secho(f"Team {team} successfully deleted", fg="green")
+            else:
+                msg = get_error_message(response)
+                click.clear()
+                click.secho(f"Failed to delete team {team}: {msg}", fg="red")
+        except Exception as e:
+            click.secho(f"An unexpected error occurred: {str(e)}", fg="red")
+
+    else: 
+        click.echo('Aborted.')
+        return
 
