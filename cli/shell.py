@@ -6,6 +6,7 @@ from cli.commands.auth import whoami
 from cli.services.team_ops import (
     ensure_team_access,
     add_member_op,
+    list_members_op,
     promote_member_op,
     demote_member_op,
     leave_team_op,
@@ -15,18 +16,23 @@ from cli.services.vault_ops import push_vault_op, pull_vault_op
 
 
 def print_shell_help():
-    click.echo("Available commands:")
-    click.echo("  push")
-    click.echo("  pull")
-    click.echo("  add-member --email <email>")
-    click.echo("  promote --email <email>")
-    click.echo("  demote --email <email>")
-    click.echo("  leave-team")
-    click.echo("  delete-team")
-    click.echo("  whoami")
-    click.echo("  help")
-    click.echo("  exit")
-    click.echo("  quit")
+    click.echo("Team Management:")
+    click.echo("  add-member     Add a team member by email.")
+    click.echo("  list-members   List team members and their roles.")
+    click.echo("  promote        Grant admin access to a team member.")
+    click.echo("  demote         Remove admin access from a team member.")
+    click.echo("  leave-team     Leave the current team.")
+    click.echo("  delete-team    Permanently delete the current team.")
+    click.echo("")
+    click.echo("Vault Operations:")
+    click.echo("  push           Encrypt and upload the local .env file.")
+    click.echo("  pull           Download and decrypt the team .env file.")
+    click.echo("")
+    click.echo("Shell:")
+    click.echo("  whoami         Show the account currently logged in.")
+    click.echo("  help           Show this message.")
+    click.echo("  exit           Leave the team shell.")
+    click.echo("  quit           Leave the team shell.")
 
 
 def parse_email_arg(args):
@@ -47,7 +53,7 @@ def confirm_delete(team_slug):
         bold=True,
     )
     click.echo(warning)
-    typed = click.prompt("Type the team slug to confirm", default="", show_default=False)
+    typed = click.prompt("Type the team name to confirm", default="", show_default=False)
     return typed == team_slug
 
 
@@ -91,6 +97,23 @@ def run_team_shell(team_slug):
 
         if command == "push":
             print_result(push_vault_op(team_slug))
+            continue
+
+        if command == "list-members":
+            members_result = list_members_op(team_slug)
+            if not members_result["ok"]:
+                print_result(members_result)
+                continue
+            members = members_result["data"].get("members", [])
+            if not members:
+                click.echo(members_result["message"])
+                continue
+            click.echo(f"Members of {team_slug}:")
+            for member in members:
+                email = member.get("email", "unknown")
+                role = member.get("role", "member")
+                joined_at = member.get("joined_at", "unknown")
+                click.echo(f"- {email} [{role}] joined {joined_at}")
             continue
 
         if command == "pull":

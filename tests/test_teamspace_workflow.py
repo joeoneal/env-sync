@@ -3,6 +3,9 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
+from click.testing import CliRunner
+
+from cli.main import cli
 from cli.services import team_ops
 from cli.shell import run_team_shell
 
@@ -54,6 +57,24 @@ class TeamOpsTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("logged in", result["message"])
 
+    def test_list_members_op_returns_members(self):
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "members": [
+                {"email": "admin@example.com", "role": "admin"},
+                {"email": "member@example.com", "role": "member"},
+            ]
+        }
+
+        with patch("cli.services.team_ops.get_token", return_value="token"), patch(
+            "cli.services.team_ops.list_members_api", return_value=response
+        ) as list_members_api:
+            result = team_ops.list_members_op("project-apollo")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(result["data"]["members"]), 2)
+        list_members_api.assert_called_once_with("project-apollo")
+
 
 class TeamShellTests(unittest.TestCase):
     def test_shell_dispatches_promote_with_active_team_context(self):
@@ -99,6 +120,64 @@ class TeamShellTests(unittest.TestCase):
         output = stdout.getvalue()
         self.assertIn("Unknown command: wat", output)
         self.assertIn("Type 'help' to see available commands.", output)
+
+    def test_shell_list_members_prints_team_members(self):
+        stdout = io.StringIO()
+        with patch("cli.shell.ensure_team_access", return_value={"ok": True, "message": "", "data": {}}), patch(
+            "cli.shell.list_members_op",
+            return_value={
+                "ok": True,
+                "message": "Members loaded.",
+                "data": {
+                    "members": [
+                        {"email": "admin@example.com", "role": "admin", "joined_at": "today"},
+                        {"email": "member@example.com", "role": "member", "joined_at": "today"},
+                    ]
+                },
+            },
+        ), patch(
+            "builtins.input",
+            side_effect=["list-members", "exit"],
+        ):
+            with redirect_stdout(stdout):
+                run_team_shell("project-apollo")
+
+        output = stdout.getvalue()
+        self.assertIn("Members of project-apollo:", output)
+        self.assertIn("admin@example.com [admin]", output)
+        self.assertIn("member@example.com [member]", output)
+
+
+class CliHelpTests(unittest.TestCase):
+    def test_top_level_help_groups_commands_and_examples(self):
+        runner = CliRunner()
+
+        result = runner.invoke(cli, ["help"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Getting Started", result.output)
+        self.assertIn("Team Management", result.output)
+        self.assertIn("Vault Operations", result.output)
+        self.assertIn("Team Shell", result.output)
+        self.assertIn("register   Create a new Env-Sync account.", result.output)
+        self.assertIn("create-team", result.output)
+        self.assertIn("Create a new team and initialize its encrypted vault.", result.output)
+        self.assertIn("list-members", result.output)
+        self.assertIn("List team members and their roles.", result.output)
+        self.assertIn("team   Enter an interactive shell scoped to one team.", result.output)
+        self.assertIn("Run `envsync COMMAND help` for command-specific options.", result.output)
+
+    def test_command_help_includes_description_and_example(self):
+        runner = CliRunner()
+
+        result = runner.invoke(cli, ["promote", "help"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Grant admin access to a team member.", result.output)
+        self.assertIn(
+            "envsync promote --team project-apollo --email bob@example.com",
+            result.output,
+        )
 
 
 if __name__ == "__main__":

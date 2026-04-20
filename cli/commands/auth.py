@@ -1,6 +1,7 @@
 import click
 import requests
 from halo import Halo
+from cli.help_command import HelpCommand
 from cli.utils.config import BASE_URL
 from cli.utils.api import save_token, get_token, delete_token
 from cli.utils.crypto import gen_keypair_if_none
@@ -44,10 +45,15 @@ def prompt_for_password():
 
         return password
 
-@click.command()
+@click.command(cls=HelpCommand, short_help='Create a new Env-Sync account.')
 @click.option('--email', prompt='Email', callback=validate_email, help='Your email address.')
 def register(email):
-    """--email <email> [flag optional]"""
+    """
+    Create a new Env-Sync account.
+
+    Example:
+      envsync register --email alice@example.com
+    """
     password = prompt_for_password()
 
     spinner = Halo(text=f"Registering account for {email}...", spinner='flip')
@@ -77,11 +83,16 @@ def register(email):
         spinner.stop()
         click.secho("Error: Could not connect to the server. Please try again.", fg='red')
 
-@click.command()
+@click.command(cls=HelpCommand, short_help='Log in and save your access token locally.')
 @click.option('--email', required = False, help='Your registered email.')
 @click.option('--password', required = False, hide_input=True, help='Your password.') 
 def login(email, password):
-    """--email <email> [flag optional]"""
+    """
+    Log in and save your access token locally.
+
+    Example:
+      envsync login --email alice@example.com
+    """
     token = get_token()
     if token:
         click.secho('You are already logged in. Please log out if you wish to log in as another user.', fg='yellow')
@@ -122,9 +133,14 @@ def login(email, password):
         spinner.stop()
         click.secho("Error: Could not connect to the server. Please try again.", fg="red")
 
-@click.command()
+@click.command(cls=HelpCommand, short_help='Remove your local login session.')
 def logout():
-    """[no flags]"""
+    """
+    Remove your local login session.
+
+    Example:
+      envsync logout
+    """
     token = get_token()
     if not token:
         click.secho('You were not logged in!', fg='yellow')
@@ -149,9 +165,14 @@ def logout():
         spinner.stop()
         click.secho('Something went wrong. Please try again.', fg='red')
 
-@click.command(name='whoami')
+@click.command(name='whoami', cls=HelpCommand, short_help='Show the account currently logged in.')
 def whoami():
-    """[no flags]"""
+    """
+    Show the account currently logged in.
+
+    Example:
+      envsync whoami
+    """
     token = get_token()
     if not token:
         click.secho('You are not logged in!', fg='yellow')

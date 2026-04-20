@@ -285,6 +285,35 @@ def prepare_add_member(team_slug):
         }
     }), 200
 
+@app.route('/teams/<string:team_slug>/members', methods=['GET'])
+@jwt_required()
+def list_team_members(team_slug):
+    current_user_id = int(get_jwt_identity())
+
+    team = get_team_by_slug(team_slug)
+    if not team:
+        return jsonify({'error': 'Team not found'}), 404
+
+    if not get_membership(team.id, current_user_id):
+        return jsonify({'error': 'UNAUTHORIZED: not a team member'}), 403
+
+    memberships = TeamMembership.query.filter_by(team_id=team.id).all()
+    members = []
+    for membership in memberships:
+        user = User.query.get(membership.user_id)
+        if user:
+            members.append({
+                'user_id': user.id,
+                'email': user.email,
+                'role': membership.role,
+                'joined_at': membership.joined_timestamp,
+            })
+
+    return jsonify({
+        'team_slug': team.slug,
+        'members': members,
+    }), 200
+
 @app.route('/teams/<string:team_slug>/members/confirm', methods=['POST'])
 @jwt_required()
 def confirm_add_member(team_slug):
@@ -410,9 +439,6 @@ def save_secret():
 
     if not team_id or not env_blob:
         return jsonify({'error': 'Missing team_id or env_blob'}), 400
-    
-    if not get_admin_membership(team.id, user_id):
-        return jsonify({'error': 'UNAUTHORIZED: admin access required to push'}), 403
 
     membership = TeamMembership.query.filter_by(user_id=user_id, team_id=team_id).first()
     if not membership:
@@ -422,6 +448,9 @@ def save_secret():
         team = Team.query.get(team_id)
         if not team:
             return jsonify({'error': 'Team not found'}), 404
+
+        if not get_admin_membership(team.id, user_id):
+            return jsonify({'error': 'UNAUTHORIZED: admin access required to push'}), 403
 
         team.env_blob = env_blob
         db.session.commit()

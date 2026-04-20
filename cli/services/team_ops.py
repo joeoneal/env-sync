@@ -7,6 +7,7 @@ from cli.utils.api import (
     leave_team_api,
     pull_vault_api,
     prepare_add_member_api,
+    list_members_api,
     confirm_add_member_api,
     delete_team_api,
     update_member_role_api,
@@ -140,6 +141,22 @@ def list_teams_op():
         return result(True, "You are not a member of any teams yet.", {"teams": []})
 
     return result(True, "Teams loaded.", {"teams": teams})
+
+
+def list_members_op(team_slug):
+    auth_error = require_login("list team members")
+    if auth_error:
+        return auth_error
+
+    response = list_members_api(team_slug)
+    if response is None or response.status_code != 200:
+        return result(False, f"Failed to list team members: {get_error_message(response)}")
+
+    members = response.json().get("members", [])
+    if not members:
+        return result(True, f"No members were found for {team_slug}.", {"members": []})
+
+    return result(True, f"Members loaded for {team_slug}.", {"members": members})
 
 
 def ensure_team_access(team_slug):

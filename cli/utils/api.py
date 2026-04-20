@@ -86,6 +86,14 @@ def prepare_add_member_api(team_slug, email):
         headers=headers
     )
 
+def list_members_api(team_slug):
+    """Lists all members of a team along with their roles."""
+    headers = get_auth_headers()
+    if not headers:
+        return None
+
+    return requests.get(f"{BASE_URL}/teams/{team_slug}/members", headers=headers)
+
 def confirm_add_member_api(team_slug, target_user_id, encrypted_key):
     """Completes membership creation with a client-wrapped team vault key."""
     headers = get_auth_headers()

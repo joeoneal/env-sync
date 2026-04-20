@@ -229,6 +229,24 @@ class AddMemberFlowTests(unittest.TestCase):
         self.assertEqual(teams[0]['team_slug'], self.team.slug)
         self.assertEqual(teams[0]['role'], 'admin')
 
+    def test_list_members_returns_team_members_and_roles(self):
+        db.session.add(
+            TeamMembership(user_id=self.member.id, team_id=self.team.id, role='member')
+        )
+        db.session.commit()
+
+        response = self.client.get(
+            f'/teams/{self.team.slug}/members',
+            headers=self.auth_headers(self.admin.id),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload['team_slug'], self.team.slug)
+        emails = {member['email']: member['role'] for member in payload['members']}
+        self.assertEqual(emails['admin@example.com'], 'admin')
+        self.assertEqual(emails['member@example.com'], 'member')
+
     def test_leave_team_removes_member_and_vault_key(self):
         db.session.add(
             TeamMembership(user_id=self.member.id, team_id=self.team.id, role='member')
@@ -281,6 +299,39 @@ class AddMemberFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.get_json()['deleted_team'])
         self.assertIsNone(Team.query.filter_by(id=self.team.id).first())
+
+    def test_save_secret_updates_vault_for_admin(self):
+        response = self.client.post(
+            '/vault',
+            json={'team_id': self.team.id, 'env_blob': 'updated-encrypted-env'},
+            headers=self.auth_headers(self.admin.id),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()['message'], 'Vault securely updated')
+        updated_team = Team.query.get(self.team.id)
+        self.assertEqual(updated_team.env_blob, 'updated-encrypted-env')
+
+    def test_save_secret_rejects_non_admin_member(self):
+        db.session.add(
+            TeamMembership(user_id=self.member.id, team_id=self.team.id, role='member')
+        )
+        db.session.add(
+            VaultKey(user_id=self.member.id, team_id=self.team.id, encrypted_key='member-envelope')
+        )
+        db.session.commit()
+
+        response = self.client.post(
+            '/vault',
+            json={'team_id': self.team.id, 'env_blob': 'updated-encrypted-env'},
+            headers=self.auth_headers(self.member.id),
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.get_json()['error'],
+            'UNAUTHORIZED: admin access required to push'
+        )
 
 
 if __name__ == '__main__':
