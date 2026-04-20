@@ -2,8 +2,9 @@ from setuptools import setup, find_packages
 
 setup(
     name='envsync',
-    version='0.1.1',
-    packages=find_packages(),
+    version='0.0.1a1',  # Bumped to a1 so PyPI accepts it if you already pushed 'a'
+    # THIS IS THE MAGIC FIX:
+    packages=find_packages(include=['cli', 'cli.*']),
     include_package_data=True,
     install_requires=[
         'click',
@@ -12,8 +13,6 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            # This line changed! It tells the terminal to look 
-            # inside the 'cli' folder, open 'main.py', and run the 'cli' function
             'envsync=cli.main:cli',
         ],
     },
