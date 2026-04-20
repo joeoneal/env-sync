@@ -436,7 +436,7 @@ def get_team_keys(team_id):
 @jwt_required()
 def who_am_i():
     user_id = get_jwt_identity()
-    user = User.query.filter_by(user_id=user_id).first()
+    user = User.query.filter_by(id=user_id).first()
 
     if not user:
         return jsonify({'error': 'No user found.'}), 404

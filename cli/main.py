@@ -1,5 +1,5 @@
 import click
-from cli.commands.auth import register, login, logout
+from cli.commands.auth import register, login, logout, whoami
 from cli.commands.vault import push, pull
 from cli.commands.team import create_team, add_member, list_teams, leave_team
 
@@ -23,6 +23,7 @@ cli.add_command(add_member)
 cli.add_command(list_teams)
 cli.add_command(leave_team)
 cli.add_command(logout)
+cli.add_command(whoami)
 
 if __name__ == '__main__':
     cli()

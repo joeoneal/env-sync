@@ -157,20 +157,25 @@ def whoami():
         click.secho('You are not logged in!', fg='yellow')
         return
     
-    
     try:
         response=requests.get(
             f'{BASE_URL}/whoami',
             headers={"Authorization": f'Bearer {token}'}
         )
 
-        if response.status_code ==200:
+        if response.status_code == 200:
             email = response.json().get('email')
             click.echo("Logged in as: ", nl=False)
             click.secho(email, fg="cyan", bold=True)
-        else:
+        elif response.status_code in (401, 422):
             click.secho("Session expired. Please log in again.", fg="red")
-            delete_token() # Clean up the bad token!
+            delete_token()
+        else:
+            try:
+                msg = response.json().get("error", response.text)
+            except ValueError:
+                msg = response.text or "Unknown server error."
+            click.secho(f"whoami failed: {msg}", fg="red")
             
     except requests.exceptions.ConnectionError:
         click.secho("Error: Could not connect to server.", fg="red")
