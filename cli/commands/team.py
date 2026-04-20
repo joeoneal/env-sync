@@ -140,7 +140,7 @@ def add_member(team, email):
 
 @click.command(name='list-teams')
 def list_teams():
-    """NO FLAGS NEEDED"""
+    """[no flags]"""
     token = get_token()
     if not token:
         click.secho("Error: You must be logged in to list teams.", fg="red")
@@ -186,3 +186,4 @@ def leave_team(team):
         click.secho(f"Success! You left {team}, and the empty team was deleted.", fg="green")
     else:
         click.secho(f"Success! You left {team}.", fg="green")
+

@@ -9,12 +9,23 @@ def save_token(token):
         json.dump({"access_token": token}, f)
 
 def get_token():
-    """Retrieves the JWT from the local hidden file."""
     if not os.path.exists(TOKEN_FILE):
         return None
-    with open(TOKEN_FILE, 'r') as f:
-        data = json.load(f)
-        return data.get("access_token")
+    try:
+        with open(TOKEN_FILE, 'r') as f:
+            data = json.load(f)
+            return data.get("access_token")
+    except (json.JSONDecodeError, KeyError):
+        return None
+    
+def delete_token():
+    try:
+        if os.path.exists(TOKEN_FILE):
+            os.remove(TOKEN_FILE)
+            return True
+    except OSError as e:
+        return ('os error as follows: ', e)
+    return False
 
 def get_auth_headers():
     """Helper to inject the JWT into the request headers."""

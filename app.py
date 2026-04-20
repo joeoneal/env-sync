@@ -432,6 +432,17 @@ def get_team_keys(team_id):
             
     return jsonify({'keys': keys}), 200
 
+@app.route('/whoami', methods=['GET'])
+@jwt_required()
+def who_am_i():
+    user_id = get_jwt_identity()
+    user = User.query.filter_by(user_id=user_id).first()
+
+    if not user:
+        return jsonify({'error': 'No user found.'}), 404
+    
+    return jsonify({'email': user.email}), 200
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 7070))
     app.run(host='0.0.0.0', port=port)
