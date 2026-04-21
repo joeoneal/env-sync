@@ -62,7 +62,11 @@ def add_member(team, email):
     Example:
       envsync add-member --team project-apollo --email bob@example.com
     """
-    render_result(add_member_op(team, email))
+    spinner = Halo(text=f"Adding {email} to {team}...", spinner='flip')
+    spinner.start()
+    op_result = add_member_op(team, email)
+    spinner.stop()
+    render_result(op_result)
 
 
 @click.command(name='list-teams', cls=HelpCommand, short_help='List the teams you belong to.')
@@ -73,7 +77,10 @@ def list_teams():
     Example:
       envsync list-teams
     """
+    spinner = Halo(text='Loading your teams...', spinner='flip')
+    spinner.start()
     op_result = list_teams_op()
+    spinner.stop()
     if not op_result["ok"]:
         render_result(op_result)
         return
@@ -101,7 +108,10 @@ def list_members(team):
     Example:
       envsync list-members --team project-apollo
     """
+    spinner = Halo(text=f"Loading members of {team}...", spinner='flip')
+    spinner.start()
     op_result = list_members_op(team)
+    spinner.stop()
     if not op_result["ok"]:
         render_result(op_result)
         return
@@ -128,7 +138,11 @@ def leave_team(team):
     Example:
       envsync leave-team --team project-apollo
     """
-    render_result(leave_team_op(team))
+    spinner = Halo(text=f"Leaving {team}...", spinner='flip')
+    spinner.start()
+    op_result = leave_team_op(team)
+    spinner.stop()
+    render_result(op_result)
 
 
 @click.command(name='delete-team', cls=HelpCommand, short_help='Permanently delete a team you administer.')
@@ -143,7 +157,10 @@ def delete_team(team):
     warning = click.style('WARNING: This is a destructive action. Deleted teams cannot be recovered. Are you sure you would like to proceed?', fg='red', bold=True)
 
     if click.confirm(warning):
+        spinner = Halo(text=f"Deleting {team}...", spinner='flip')
+        spinner.start()
         op_result = delete_team_op(team)
+        spinner.stop()
         click.clear()
         render_result(op_result)
     else:
@@ -160,7 +177,11 @@ def promote(team, email):
     Example:
       envsync promote --team project-apollo --email bob@example.com
     """
-    render_result(promote_member_op(team, email))
+    spinner = Halo(text=f"Promoting {email} in {team}...", spinner='flip')
+    spinner.start()
+    op_result = promote_member_op(team, email)
+    spinner.stop()
+    render_result(op_result)
 
 
 @click.command(name='demote', cls=HelpCommand, short_help='Remove admin access from a team member.')
@@ -173,7 +194,11 @@ def demote(team, email):
     Example:
       envsync demote --team project-apollo --email bob@example.com
     """
-    render_result(demote_member_op(team, email))
+    spinner = Halo(text=f"Demoting {email} in {team}...", spinner='flip')
+    spinner.start()
+    op_result = demote_member_op(team, email)
+    spinner.stop()
+    render_result(op_result)
 
 
 @click.command(name="team", cls=HelpCommand, short_help='Enter an interactive shell scoped to one team.')

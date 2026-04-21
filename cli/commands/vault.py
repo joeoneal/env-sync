@@ -1,4 +1,5 @@
 import click
+from halo import Halo
 
 from cli.help_command import HelpCommand
 from cli.services.vault_ops import push_vault_op, pull_vault_op
@@ -18,7 +19,11 @@ def push(team):
     Example:
       envsync push --team project-apollo
     """
-    render_result(push_vault_op(team))
+    spinner = Halo(text=f"Pushing encrypted vault for {team}...", spinner='flip')
+    spinner.start()
+    op_result = push_vault_op(team)
+    spinner.stop()
+    render_result(op_result)
 
 
 @click.command(cls=HelpCommand, short_help='Download and decrypt the team .env file.')
@@ -30,4 +35,8 @@ def pull(team):
     Example:
       envsync pull --team project-apollo
     """
-    render_result(pull_vault_op(team))
+    spinner = Halo(text=f"Pulling encrypted vault for {team}...", spinner='flip')
+    spinner.start()
+    op_result = pull_vault_op(team)
+    spinner.stop()
+    render_result(op_result)
