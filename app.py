@@ -402,8 +402,9 @@ def update_member_role(team_slug):
         return jsonify({'error': 'User is not a member of this team'}), 404
 
     if target_membership.role == new_role:
+        article = 'an' if new_role == 'admin' else 'a'
         return jsonify({
-            'message': 'Role already set',
+            'message': f'User is already {article} {new_role}',
             'team_slug': team.slug,
             'email': target_user.email,
             'role': new_role,
@@ -411,6 +412,8 @@ def update_member_role(team_slug):
 
     if target_membership.role == 'admin' and new_role == 'member':
         if not get_other_admin_membership(team.id, target_user.id):
+            if target_user.id == current_user_id:
+                return jsonify({'error': 'Cannot demote yourself because you are the last admin'}), 409
             return jsonify({'error': 'Cannot demote the last admin'}), 409
 
     target_membership.role = new_role
@@ -432,7 +435,7 @@ def update_member_role(team_slug):
 @jwt_required()
 def save_secret():
     user_id = int(get_jwt_identity()) 
-    data = request.get_json()
+    data = request.get_json() or {}
     
     team_id = data.get('team_id')
     env_blob = data.get('env_blob')
@@ -444,6 +447,16 @@ def save_secret():
     if not membership:
         return jsonify({'error': 'UNAUTHORIZED: not a team member'}), 403
     
+    password = data.get('password')
+    user = User.query.get(user_id)
+    if not password:
+        return jsonify({'error': 'Password required to push'}), 401
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    if not bcrypt.check_password_hash(user.password_hash, password):
+        return jsonify({'error': 'Invalid username or password'}), 401
+
     try:
         team = Team.query.get(team_id)
         if not team:

@@ -217,6 +217,44 @@ class AddMemberFlowTests(unittest.TestCase):
         ).first()
         self.assertEqual(updated_membership.role, 'member')
 
+    def test_update_member_role_reports_already_admin(self):
+        response = self.client.patch(
+            f'/teams/{self.team.slug}/members/role',
+            json={'email': self.admin.email, 'role': 'admin'},
+            headers=self.auth_headers(self.admin.id),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()['message'], 'User is already an admin')
+
+    def test_update_member_role_reports_already_member(self):
+        db.session.add(
+            TeamMembership(user_id=self.member.id, team_id=self.team.id, role='member')
+        )
+        db.session.commit()
+
+        response = self.client.patch(
+            f'/teams/{self.team.slug}/members/role',
+            json={'email': self.member.email, 'role': 'member'},
+            headers=self.auth_headers(self.admin.id),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()['message'], 'User is already a member')
+
+    def test_update_member_role_self_demote_last_admin_has_specific_message(self):
+        response = self.client.patch(
+            f'/teams/{self.team.slug}/members/role',
+            json={'email': self.admin.email, 'role': 'member'},
+            headers=self.auth_headers(self.admin.id),
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.get_json()['error'],
+            'Cannot demote yourself because you are the last admin'
+        )
+
     def test_list_teams_returns_membership_metadata(self):
         response = self.client.get(
             '/teams',
@@ -303,7 +341,11 @@ class AddMemberFlowTests(unittest.TestCase):
     def test_save_secret_updates_vault_for_admin(self):
         response = self.client.post(
             '/vault',
-            json={'team_id': self.team.id, 'env_blob': 'updated-encrypted-env'},
+            json={
+                'team_id': self.team.id,
+                'env_blob': 'updated-encrypted-env',
+                'password': 'pw',
+            },
             headers=self.auth_headers(self.admin.id),
         )
 
@@ -323,7 +365,11 @@ class AddMemberFlowTests(unittest.TestCase):
 
         response = self.client.post(
             '/vault',
-            json={'team_id': self.team.id, 'env_blob': 'updated-encrypted-env'},
+            json={
+                'team_id': self.team.id,
+                'env_blob': 'updated-encrypted-env',
+                'password': 'pw',
+            },
             headers=self.auth_headers(self.member.id),
         )
 
@@ -332,6 +378,30 @@ class AddMemberFlowTests(unittest.TestCase):
             response.get_json()['error'],
             'UNAUTHORIZED: admin access required to push'
         )
+
+    def test_save_secret_requires_password(self):
+        response = self.client.post(
+            '/vault',
+            json={'team_id': self.team.id, 'env_blob': 'updated-encrypted-env'},
+            headers=self.auth_headers(self.admin.id),
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.get_json()['error'], 'Password required to push')
+
+    def test_save_secret_rejects_invalid_password(self):
+        response = self.client.post(
+            '/vault',
+            json={
+                'team_id': self.team.id,
+                'env_blob': 'updated-encrypted-env',
+                'password': 'wrong-password',
+            },
+            headers=self.auth_headers(self.admin.id),
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.get_json()['error'], 'Invalid username or password')
 
 
 if __name__ == '__main__':

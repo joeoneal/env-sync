@@ -207,7 +207,10 @@ def promote_member_op(team_slug, email):
 
     response = update_member_role_api(team_slug, email, "admin")
     if response is not None and response.status_code == 200:
-        return result(True, f"Success! {email} is now an admin of {team_slug}.")
+        message = response.json().get("message", f"Success! {email} is now an admin of {team_slug}.")
+        if message == "Role updated successfully":
+            message = f"Success! {email} is now an admin of {team_slug}."
+        return result(True, message)
 
     return result(False, f"Failed to promote member: {get_error_message(response)}")
 
@@ -219,6 +222,9 @@ def demote_member_op(team_slug, email):
 
     response = update_member_role_api(team_slug, email, "member")
     if response is not None and response.status_code == 200:
-        return result(True, f"Success! {email} is now a member of {team_slug}.")
+        message = response.json().get("message", f"Success! {email} is now a member of {team_slug}.")
+        if message == "Role updated successfully":
+            message = f"Success! {email} is now a member of {team_slug}."
+        return result(True, message)
 
     return result(False, f"Failed to demote member: {get_error_message(response)}")

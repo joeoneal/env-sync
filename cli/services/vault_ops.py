@@ -1,4 +1,5 @@
 import os
+import click
 
 from cli.services.team_ops import result, get_error_message
 from cli.utils.api import get_token, pull_vault_api, push_vault_api
@@ -47,7 +48,8 @@ def push_vault_op(team_slug):
     except Exception as e:
         return result(False, f"Failed to encrypt payload: {str(e)}")
 
-    push_res = push_vault_api(team_id, encrypted_env_blob)
+    password = click.prompt("Password", hide_input=True)
+    push_res = push_vault_api(team_id, encrypted_env_blob, password)
     if push_res and push_res.status_code == 200:
         return result(True, "Success! Vault securely updated.")
 
