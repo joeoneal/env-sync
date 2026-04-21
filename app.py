@@ -447,16 +447,6 @@ def save_secret():
     membership = TeamMembership.query.filter_by(user_id=user_id, team_id=team_id).first()
     if not membership:
         return jsonify({'error': 'UNAUTHORIZED: not a team member'}), 403
-    
-    password = data.get('password')
-    user = User.query.get(user_id)
-    if not password:
-        return jsonify({'error': 'Password required to push'}), 401
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
-    
-    if not bcrypt.check_password_hash(user.password_hash, password):
-        return jsonify({'error': 'Invalid username or password'}), 401
 
     try:
         team = Team.query.get(team_id)

@@ -53,7 +53,7 @@ def create_team_api(team_name, env_blob, encrypted_key):
     
     return requests.post(f"{BASE_URL}/teams", json=payload, headers=headers)
 
-def push_vault_api(team_id, env_blob, password):
+def push_vault_api(team_id, env_blob):
     """O(1) Scaling: Sends ONLY the updated vault payload to the server."""
     headers = get_auth_headers()
     if not headers:
@@ -62,7 +62,6 @@ def push_vault_api(team_id, env_blob, password):
     payload = {
         "team_id": team_id,
         "env_blob": env_blob,
-        "password": password
     }
     
     return requests.post(f"{BASE_URL}/vault", json=payload, headers=headers)

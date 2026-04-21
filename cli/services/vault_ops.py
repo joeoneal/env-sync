@@ -48,8 +48,14 @@ def push_vault_op(team_slug):
     except Exception as e:
         return result(False, f"Failed to encrypt payload: {str(e)}")
 
-    password = click.prompt("Password", hide_input=True)
-    push_res = push_vault_api(team_id, encrypted_env_blob, password)
+    confirmed = click.confirm(
+        f"This will overwrite the current vault for {team_slug}. Continue?",
+        default=False,
+    )
+    if not confirmed:
+        return result(False, "Push aborted.")
+
+    push_res = push_vault_api(team_id, encrypted_env_blob)
     if push_res and push_res.status_code == 200:
         return result(True, "Success! Vault securely updated.")
 

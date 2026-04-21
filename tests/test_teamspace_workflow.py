@@ -174,7 +174,7 @@ class TeamShellTests(unittest.TestCase):
 
 
 class VaultOpsTests(unittest.TestCase):
-    def test_push_vault_op_prompts_for_password_and_passes_it(self):
+    def test_push_vault_op_confirms_before_uploading(self):
         pull_response = Mock(status_code=200)
         pull_response.json.return_value = {
             "team_id": 7,
@@ -194,14 +194,43 @@ class VaultOpsTests(unittest.TestCase):
         ), patch(
             "cli.services.vault_ops.CryptoEngine.encrypt_env", return_value="encrypted-blob"
         ), patch(
-            "cli.services.vault_ops.click.prompt", return_value="pw"
+            "cli.services.vault_ops.click.confirm", return_value=True
         ), patch(
             "cli.services.vault_ops.push_vault_api", return_value=push_response
         ) as push_vault_api:
             result = vault_ops.push_vault_op("project-apollo")
 
         self.assertTrue(result["ok"])
-        push_vault_api.assert_called_once_with(7, "encrypted-blob", "pw")
+        push_vault_api.assert_called_once_with(7, "encrypted-blob")
+
+    def test_push_vault_op_stops_when_confirmation_is_declined(self):
+        pull_response = Mock(status_code=200)
+        pull_response.json.return_value = {
+            "team_id": 7,
+            "encrypted_key": "wrapped-key",
+        }
+
+        with patch("cli.services.vault_ops.get_token", return_value="token"), patch(
+            "cli.services.vault_ops.os.path.exists", return_value=True
+        ), patch(
+            "builtins.open",
+            unittest.mock.mock_open(read_data="file-contents"),
+        ), patch(
+            "cli.services.vault_ops.pull_vault_api", return_value=pull_response
+        ), patch(
+            "cli.services.vault_ops.CryptoEngine.unwrap_key", return_value=b"vault-key"
+        ), patch(
+            "cli.services.vault_ops.CryptoEngine.encrypt_env", return_value="encrypted-blob"
+        ), patch(
+            "cli.services.vault_ops.click.confirm", return_value=False
+        ), patch(
+            "cli.services.vault_ops.push_vault_api"
+        ) as push_vault_api:
+            result = vault_ops.push_vault_op("project-apollo")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["message"], "Push aborted.")
+        push_vault_api.assert_not_called()
 
 
 class CliHelpTests(unittest.TestCase):

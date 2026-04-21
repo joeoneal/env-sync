@@ -349,7 +349,6 @@ class AddMemberFlowTests(unittest.TestCase):
             json={
                 'team_id': self.team.id,
                 'env_blob': 'updated-encrypted-env',
-                'password': 'pw',
             },
             headers=self.auth_headers(self.admin.id),
         )
@@ -373,7 +372,6 @@ class AddMemberFlowTests(unittest.TestCase):
             json={
                 'team_id': self.team.id,
                 'env_blob': 'updated-encrypted-env',
-                'password': 'pw',
             },
             headers=self.auth_headers(self.member.id),
         )
@@ -383,30 +381,6 @@ class AddMemberFlowTests(unittest.TestCase):
             response.get_json()['error'],
             'UNAUTHORIZED: admin access required to push'
         )
-
-    def test_save_secret_requires_password(self):
-        response = self.client.post(
-            '/vault',
-            json={'team_id': self.team.id, 'env_blob': 'updated-encrypted-env'},
-            headers=self.auth_headers(self.admin.id),
-        )
-
-        self.assertEqual(response.status_code, 401)
-        self.assertEqual(response.get_json()['error'], 'Password required to push')
-
-    def test_save_secret_rejects_invalid_password(self):
-        response = self.client.post(
-            '/vault',
-            json={
-                'team_id': self.team.id,
-                'env_blob': 'updated-encrypted-env',
-                'password': 'wrong-password',
-            },
-            headers=self.auth_headers(self.admin.id),
-        )
-
-        self.assertEqual(response.status_code, 401)
-        self.assertEqual(response.get_json()['error'], 'Invalid username or password')
 
 
 if __name__ == '__main__':
