@@ -1,7 +1,7 @@
 import os
 
 TOKEN_FILE = os.path.expanduser("~/.envsync_config")
-BASE_URL = "https://env-sync.up.railway.app"
+BASE_URL = os.getenv("ENVSYNC_BASE_URL", "https://env-sync.up.railway.app").rstrip("/")
 
 PRIVATE_KEY_FILE = os.path.expanduser("~/.envsync_private.pem")
 PUBLIC_KEY_FILE = os.path.expanduser("~/.envsync_public.pem")

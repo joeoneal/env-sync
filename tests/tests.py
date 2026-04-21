@@ -10,7 +10,7 @@ SERVER_DIR = os.path.join(ROOT_DIR, 'server')
 if SERVER_DIR not in sys.path:
     sys.path.insert(0, SERVER_DIR)
 
-from app import app
+from app import app, bcrypt
 from db_models import db, User, Team, TeamMembership, VaultKey
 
 
@@ -27,23 +27,25 @@ class AddMemberFlowTests(unittest.TestCase):
         db.create_all()
         self.client = app.test_client()
 
+        hashed_pw = bcrypt.generate_password_hash('pw').decode('utf-8')
+
         self.admin = User(
             email='admin@example.com',
-            password_hash='pw',
+            password_hash=hashed_pw,
             public_key='admin-public-key',
         )
         self.member = User(
             email='member@example.com',
-            password_hash='pw',
+            password_hash=hashed_pw,
             public_key='member-public-key',
         )
         self.no_key_user = User(
             email='nokey@example.com',
-            password_hash='pw',
+            password_hash=hashed_pw,
         )
         self.outsider = User(
             email='outsider@example.com',
-            password_hash='pw',
+            password_hash=hashed_pw,
             public_key='outsider-public-key',
         )
 
@@ -197,7 +199,10 @@ class AddMemberFlowTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 409)
-        self.assertEqual(response.get_json()['error'], 'Cannot demote the last admin')
+        self.assertEqual(
+            response.get_json()['error'],
+            'Cannot demote yourself because you are the last admin'
+        )
 
     def test_update_member_role_allows_demoting_when_other_admin_exists(self):
         db.session.add(

@@ -15,8 +15,9 @@ app = Flask(__name__)
 load_dotenv()
 
 # postgresql://[user]:[password]@[host]:[port]/[database_name]
-# config
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+# Fall back to a local SQLite database so the app can boot in tests and local dev
+# before Railway-style environment variables are configured.
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///envsync.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # jwt config

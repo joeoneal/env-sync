@@ -1,34 +1,187 @@
-# Project Proposal: Secure .env Credential Sharing Tool
+# Env-Sync
 
-## The Problem
-The problem that will be addressed by this project is the need of developers working in teams to share secret credentials, such as API keys, that are stored typically in `.env` files. Because these files are confidential, they cannot be added to a remote repository. There needs to be a way for team members to access such credentials securely, without having others share them via third party communication.
+Env-Sync is a CLI-first tool for sharing encrypted `.env` files across a team without committing secrets to Git or sending them through chat.
 
-## Target Audience
-The target audience of this project is anyone working in teams to develop software.
-* **Development Teams:** This largely consists of software development teams.
-* **Students:** Could also include students working on projects.
-* **Individual Developers:** In some cases, it would also be targeted at individual developers working on a project across multiple machines.
+The current architecture has two pieces:
 
-## Context
-The problem occurs largely when a new member joins a team or project and needs to be onboarded. When new features are added, new API keys are added to the `.env` file but cannot be pushed to a remote repository. Currently, third party communication services that are not secure are often utilized to share information.
+- A Flask API that stores encrypted vault payloads, team memberships, and per-user wrapped vault keys.
+- A Python CLI published as `envsync-vault` that handles local authentication, RSA key generation, encryption, and pull/push workflows.
 
-## Significance
-Using a messaging service to send credentials without any kind of encryption poses quite a risk to security. If an account was breached containing messages related to the contents of a `.env` file, someone with malicious intent could suddenly have access to all API keys, to databases, etc.
+## What It Does
 
-Developers know that sensitive information should not be shared through messaging applications, but do it anyway due to convenience. Students are even less likely to take proper precautions. There should be a way to access said information that is just as convenient and still secure.
+- Registers users and authenticates them with JWTs
+- Generates an RSA key pair locally on first login
+- Encrypts the team `.env` with a symmetric vault key
+- Wraps that vault key separately for each authorized team member
+- Lets admins create teams, add members, promote/demote roles, and delete teams
+- Lets members pull and decrypt the team `.env` into their local project directory
 
-> **Scenario:** A possible scenario involves a tech startup sharing code via a discord server. Someone sends the `.env` file in a chat to a new member so they can access all of the environment variables. One of them later clicks on a phishing link by mistake, and their discord account becomes compromised. The attacker could then gain access to the startups database, customer information, all third party services, etc.
+## MVP Scope
 
-## Existing Solutions
+Env-Sync is currently aimed at small internal teams, class projects, and early pilots. It is not yet positioned as a hardened enterprise secrets manager.
 
-### Password Managers
-Password managers can be used to save credentials, but they typically are not designed to save keys integrated directly into the workflow of a developer. They often result in copy and paste, which is clunky and adds unnecessary steps.
+## Install The CLI
 
-### Commercial Tools
-There are commercial tools that have been released to solve this issue for teams of developers. These are polished solutions that do work and do combat this issue. However:
-* **Cost:** They can be expensive for small companies and student teams. They seem to often charge a nominal amount “per secret” that can add up quickly if working on a larger project.
-* **Complexity:** They can also be complex to configure and then host.
+From PyPI:
 
-## Proposed Solution
-I aim to create a tool with an easy to use **command line interface**. It will fall into a nice middle ground of being much more secure than a simple chat in a messaging app, but not as complex and expensive as a deployed service from a giant corporation.
+```bash
+pip install envsync-vault
+```
 
+Verify the install:
+
+```bash
+envsync help
+```
+
+## CLI Configuration
+
+By default the CLI points at the hosted Railway API:
+
+```text
+https://env-sync.up.railway.app
+```
+
+Override that with an environment variable when testing locally or against another deployment:
+
+```bash
+export ENVSYNC_BASE_URL="http://127.0.0.1:7070"
+```
+
+## Quick Start
+
+Inside the project directory whose `.env` you want to share:
+
+```bash
+envsync register --email alice@example.com
+envsync login --email alice@example.com
+envsync create-team --name "Project Apollo"
+envsync push --team project-apollo
+```
+
+On another machine or for another team member:
+
+```bash
+envsync register --email bob@example.com
+envsync login --email bob@example.com
+```
+
+Back on the admin account:
+
+```bash
+envsync add-member --team project-apollo --email bob@example.com
+```
+
+Then the invited member can pull:
+
+```bash
+envsync pull --team project-apollo
+```
+
+## Common Commands
+
+Authentication:
+
+```bash
+envsync register --email you@example.com
+envsync login --email you@example.com
+envsync whoami
+envsync logout
+```
+
+Teams:
+
+```bash
+envsync create-team --name "Project Apollo"
+envsync list-teams
+envsync list-members --team project-apollo
+envsync add-member --team project-apollo --email bob@example.com
+envsync promote --team project-apollo --email bob@example.com
+envsync demote --team project-apollo --email bob@example.com
+envsync leave-team --team project-apollo
+envsync delete-team --team project-apollo
+```
+
+Vault operations:
+
+```bash
+envsync push --team project-apollo
+envsync pull --team project-apollo
+envsync team project-apollo
+```
+
+## Local Development
+
+Create a virtualenv and install the project dependencies:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
+```
+
+Set the environment variables required by the Flask app:
+
+```bash
+export DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DBNAME"
+export JWT_KEY="replace-me"
+```
+
+Run migrations:
+
+```bash
+python -m flask --app app db upgrade
+```
+
+Start the API locally:
+
+```bash
+python app.py
+```
+
+Then point the CLI at the local API:
+
+```bash
+export ENVSYNC_BASE_URL="http://127.0.0.1:7070"
+```
+
+## Railway Deployment
+
+This repo includes Railway deployment configuration:
+
+- [railway.toml](/Users/joeoneal/senior/spring/capstone/env-sync/railway.toml)
+- [Procfile](/Users/joeoneal/senior/spring/capstone/env-sync/Procfile)
+
+Current deploy behavior:
+
+- Runs Alembic migrations before deploy
+- Starts the Flask app with Gunicorn
+
+Required deployment environment variables:
+
+- `DATABASE_URL`
+- `JWT_KEY`
+
+## Tests
+
+Run the tests with the project virtualenv so the Flask dependencies are available:
+
+```bash
+.venv/bin/python -m unittest discover -s tests
+```
+
+## Project Layout
+
+- [app.py](/Users/joeoneal/senior/spring/capstone/env-sync/app.py): Flask API
+- [db_models.py](/Users/joeoneal/senior/spring/capstone/env-sync/db_models.py): SQLAlchemy models
+- [cli](/Users/joeoneal/senior/spring/capstone/env-sync/cli): CLI package
+- [migrations](/Users/joeoneal/senior/spring/capstone/env-sync/migrations): Alembic migrations
+- [tests](/Users/joeoneal/senior/spring/capstone/env-sync/tests): unit and smoke tests
+
+## Known Limitations
+
+- The CLI currently stores its local auth token on disk.
+- The private key is generated locally and stored for reuse.
+- `pull` writes a `.env` file into the current working directory.
+- This project has not yet completed a full production hardening pass.
