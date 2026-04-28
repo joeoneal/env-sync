@@ -51,6 +51,13 @@ export ENVSYNC_BASE_URL="http://127.0.0.1:7070"
 Register and log in:
 
 ```bash
+envsync register
+envsync login
+```
+
+You can also pass the email directly with flags:
+
+```bash
 envsync register --email alice@example.com
 envsync login --email alice@example.com
 ```
@@ -105,6 +112,35 @@ envsync push --team project-apollo
 envsync pull --team project-apollo
 envsync team project-apollo
 ```
+
+## Team Shell
+
+You can enter a team-specific interactive shell with:
+
+```bash
+envsync team project-apollo
+```
+
+This opens a prompt scoped to that team so you do not need to repeat `--team project-apollo` on every command.
+
+Available commands inside the team shell include:
+
+```text
+push
+pull
+list-members
+add-member --email bob@example.com
+promote --email bob@example.com
+demote --email bob@example.com
+leave-team
+delete-team
+whoami
+help
+exit
+quit
+```
+
+This is useful when you are doing several operations on the same team in one session.
 
 ## Local Development
 
