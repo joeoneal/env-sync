@@ -117,7 +117,7 @@ envsync team project-apollo
 
 CLI help overview:
 
-![Env-Sync CLI help menu](assets/help_img.png)
+<img src="assets/help_img.png" alt="Env-Sync CLI help menu" width="700" />
 
 ## Team Shell
 
