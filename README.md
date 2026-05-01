@@ -113,6 +113,12 @@ envsync pull --team project-apollo
 envsync team project-apollo
 ```
 
+## Interface Image
+
+CLI help overview:
+
+![Env-Sync CLI help menu](assets/help_img.png)
+
 ## Team Shell
 
 You can enter a team-specific interactive shell with:
